@@ -1,67 +1,53 @@
-import os
-import argparse
 import numpy as np
 import torch
-
-from src.env_utils import create_env, flatten_obs, discrete_to_continuous_action
-from src.network import DQNNetwork
-from src.replay_buffer import ReplayBuffer
+from src.env_utils import create_env
 from src.agent import DQNAgent
 
-def train(num_episodes=3000, batch_size=128, sync_target_freq=5):
-    """
-    the main training loop 
-    """
-    # 1. setup the game and data structures
+def train_agent():
+    # 1. initialize environment and optimized hyperparameters
     env = create_env()
+    num_episodes = 1000
+    batch_size = 128
+    gamma = 0.99
+    sync_target_freq = 5  # sync target network every 5 episodes for faster tracking
     
-    # MetaDrive natively gives us 259 numbers, and we have 6 possible actions
-    state_size = 259 
-    action_size = 6
+    # epsilon scheduling tailored for 1000 episodes
+    epsilon = 1.0
+    epsilon_decay = 0.996
+    min_epsilon = 0.10
     
-    # initialize the memory and the driver
-    memory = ReplayBuffer(capacity=10000)
-    agent = DQNAgent(state_size, action_size)
+    # 2. initialize agent
     
-    # exploration parameters (Epsilon)
-    epsilon = 1.0          # Start by taking 100% random actions to explore
-    epsilon_min = 0.05     # Never go below 5% random actions
-    epsilon_decay = 0.998  # Slowly reduce random actions over time
+    state_shape = env.observation_space.shape[0]
+    action_shape = env.action_space.n
+    agent = DQNAgent(state_shape, action_shape, gamma=gamma)
     
-    print(f"start training for {num_episodes} episodes") # a quick print to check everything is working before using google colab to train the model
+    # 3. tracking Arrays for Task 8 Reports
+    rewards_history = []
+    steps_history = []
+    crash_history = []  # 0 = success, 1 = out_of_road, 2 = crash_vehicle
     
-    # 2. the training loop 
+
     for episode in range(1, num_episodes + 1):
-        obs, info = env.reset()
-        state = flatten_obs(obs)
-        
+        state, info = env.reset()
         total_reward = 0
         steps = 0
-        crashed = False
         
         while True:
-            # step 1: driver picks an action
-            action_idx = agent.act(state, epsilon)
-            continuous_action = discrete_to_continuous_action(action_idx)
+            # select action using epsilon-greedy strategy
+            action = agent.select_action(state, epsilon)
             
-            # step 2: execute action in the game
-            next_obs, reward, terminated, truncated, info = env.step(continuous_action)
+            # step environment
+            next_state, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            next_state = flatten_obs(next_obs)
             
-            # check if we crashed 
-            if info.get("crash", False) or info.get("crash_vehicle", False):
-                crashed = True
+            # store experience in replay buffer
+            agent.replay_buffer.push(state, action, reward, next_state, done)
             
-            # step 3: save the memory
-            memory.add(state, action_idx, reward, next_state, done)
-            
-            # step 4: learn from past mistakes 
-            if len(memory) >= batch_size:
-                batch = memory.sample(batch_size)
-                agent.learn(batch)
+            # train the network if buffer has enough data
+            if len(agent.replay_buffer) > batch_size:
+                agent.update_policy_network(batch_size)
                 
-            # move to the next frame
             state = next_state
             total_reward += reward
             steps += 1
@@ -69,32 +55,40 @@ def train(num_episodes=3000, batch_size=128, sync_target_freq=5):
             if done:
                 break
                 
-        # 3. end of episode bookkeeping
-        # decay epsilon so the car relies more on its brain and less on random guesses
-        if epsilon > epsilon_min:
-            epsilon *= epsilon_decay
+        # determine specific termination reason and map to numerical codes
+        if info.get("arrive_dest", False):
+            reason = "success_finish"
+            crash_code = 0
+        elif info.get("out_of_road", False):
+            reason = "out_of_road"
+            crash_code = 1
+        else:
+            reason = "crash_vehicle"
+            crash_code = 2
             
-        # update the frozen target network periodically
+        # append metrics to tracking lists
+        rewards_history.append(total_reward)
+        steps_history.append(steps)
+        crash_history.append(crash_code)
+        
+        # sync target network
         if episode % sync_target_freq == 0:
             agent.update_target_network()
             
-        print(f"Episode: {episode}/{num_episodes} | Steps: {steps} | Reward: {total_reward:.2f} | Crashed: {crashed} | Epsilon: {epsilon:.2f}")
+        # decay exploration rate
+        epsilon = max(min_epsilon, epsilon * epsilon_decay)
+        
+        print(f"Episode: {episode:4d}/{num_episodes} | Steps: {steps:3d} | "
+              f"Reward: {total_reward:6.2f} | Epsilon: {epsilon:.3f} | Reason: {reason}")
 
-    # 4. save the model 
+    # 4. save everything 
+    torch.save(agent.policy_net.state_dict(), "models/dqn_trained.pt")
+    np.save("models/rewards_history.npy", np.array(rewards_history))
+    np.save("models/steps_history.npy", np.array(steps_history))
+    np.save("models/crash_history.npy", np.array(crash_history))
+    
     env.close()
-    
-    
-    save_path = "models/dqn_trained.pt"
-    
-    # save the weights of the policy network
-    torch.save(agent.policy_net.state_dict(), save_path)
-    print("training complete")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="train a DQN agent in MetaDrive")
-    parser.add_argument("--episodes", type=int, default=3000, help="number of episodes to train")
-    
-    args = parser.parse_args()
-    
-    train(num_episodes=args.episodes)
+    train_agent()
