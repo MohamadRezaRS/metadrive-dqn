@@ -1,0 +1,102 @@
+import argparse
+import json
+import numpy as np
+import torch
+
+from src.env_utils import create_env, flatten_obs, discrete_to_continuous_action
+from src.agent import DQNAgent
+
+def evaluate_agent(num_episodes):
+    # initialize environment
+    env = create_env()
+    
+    # initialize agent architecture
+    state_size = 259 
+    action_size = 6
+    agent = DQNAgent(state_size, action_size)
+    
+    # load trained weights and set network to evaluation mode
+    agent.policy_net.load_state_dict(torch.load("models/dqn_trained.pt"))
+    agent.policy_net.eval()
+    
+
+    print(f"starting evaluation for {num_episodes} episodes")
+
+    
+    # initialize tracking metrics
+    total_rewards = []
+    success_count = 0
+    out_of_road_count = 0
+    crash_vehicle_count = 0
+    
+    for episode in range(1, num_episodes + 1):
+        obs, info = env.reset()
+        state = flatten_obs(obs)
+        
+        episode_reward = 0
+        steps = 0
+        
+        while True:
+            # bypass exploration by strictly using policy network predictions
+            action_idx = agent.act(state, epsilon=0.0)
+            continuous_action = discrete_to_continuous_action(action_idx)
+            
+            next_obs, reward, terminated, truncated, info = env.step(continuous_action)
+            done = terminated or truncated
+            
+            state = flatten_obs(next_obs)
+            episode_reward += reward
+            steps += 1
+            
+            if done:
+                # categorize termination reason
+                if info.get("arrive_dest", False):
+                    success_count += 1
+                    reason = "success"
+                elif info.get("out_of_road", False):
+                    out_of_road_count += 1
+                    reason = "out_of_road"
+                else:
+                    crash_vehicle_count += 1
+                    reason = "crash_vehicle"
+                break
+                
+        total_rewards.append(episode_reward)
+        print(f"eval episode {episode:2d}/{num_episodes} | steps: {steps:3d} | reward: {episode_reward:6.2f} | result: {reason}")
+
+    # calculate final aggregates
+    average_reward = float(np.mean(total_rewards))
+    success_rate = (success_count / num_episodes) * 100
+    out_of_road_rate = (out_of_road_count / num_episodes) * 100
+    crash_vehicle_rate = (crash_vehicle_count / num_episodes) * 100
+
+    
+    print("evaluation summary") 
+    print(f"average reward:      {average_reward:.2f}")
+    print(f"success rate:        {success_rate:.1f}%")
+    print(f"out of road rate:    {out_of_road_rate:.1f}%")
+    print(f"vehicle crash rate:  {crash_vehicle_rate:.1f}%")
+    
+    
+    # serialize metrics for report generation
+    report_data = {
+        "average_reward": average_reward,
+        "success_rate": success_rate,
+        "out_of_road_rate": out_of_road_rate,
+        "crash_vehicle_rate": crash_vehicle_rate
+    }
+    
+    with open("Evaluation/evaluation_report.json", "w") as file:
+        json.dump(report_data, file, indent=4)
+        
+    print("[info] evaluation metrics saved to Evaluation/evaluation_report.json")
+    
+    env.close()
+
+if __name__ == "__main__":
+    # parse command line arguments for episode count
+    parser = argparse.ArgumentParser(description="evaluate trained dqn agent performance")
+    parser.add_argument("--episodes", type=int, default=20, help="number of evaluation episodes")
+    
+    args = parser.parse_args()
+    evaluate_agent(args.episodes)
