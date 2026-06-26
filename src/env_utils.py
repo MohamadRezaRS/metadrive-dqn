@@ -13,9 +13,9 @@ def create_env(start_seed,num_scenarios):
         "crash_vehicle_done": True, # end the game immediately if the car crashes into something
         "out_of_route_done": True,   # end the game immediately if the car drives off the road
         #  THE BALANCED REWARD SHAPING 
-        "crash_vehicle_penalty": 100.0,  
-        "out_of_road_penalty": 100.0,    
-        "success_reward": 400.0,
+        "crash_vehicle_penalty": 50.0,  
+        "out_of_road_penalty": 50.0,    
+        "success_reward": 200.0,
     }
     return MetaDriveEnv(config)
 
@@ -27,7 +27,6 @@ def flatten_obs(obs):
     """
     return np.array(obs, dtype=np.float32).flatten()
 
-import numpy as np
 
 def discrete_to_continuous_action(action_idx):
     """
@@ -36,12 +35,12 @@ def discrete_to_continuous_action(action_idx):
     """
 
     action_map = {
-            0: [-1.0, -1.0], # 0: Left + Brake
-            1: [-1.0,  0.4], # 1: Left + Forward
-            2: [ 0.0, -1.0], # 2: Straight + Brake (Heavy emergency brake)
-            3: [ 0.0,  1.0], # 3: Straight + Forward (Cruising throttle)
-            4: [ 1.0, -1.0], # 4: Right + Brake
-            5: [ 1.0,  0.4]  # 5: Right + Forward
+        0: [-1.0,  0.1], # 0: Hard Left + Engine Brake (Dodging)
+        1: [-0.75, 0.6], # 1: Mild Left + Forward (High-speed cornering)
+        2: [ 0.0,  0.1], # 2: Straight + Engine Brake (Slowing down for traffic, NO PARKING)
+        3: [ 0.0,  0.8], # 3: Straight + Gas (Score accumulator)
+        4: [ 1.0,  0.1], # 4: Hard Right + Engine Brake (Dodging)
+        5: [ 0.75, 0.6]  # 5: Mild Right + Forward (High-speed cornering)
         }
     # return the mapped action. If something goes wrong, default to [0.0, 0.0] (do nothing)
     return np.array(action_map.get(action_idx, [0.0, 0.0]))
