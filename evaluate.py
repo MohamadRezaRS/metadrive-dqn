@@ -12,7 +12,7 @@ def evaluate_agent(num_episodes, start_seed, num_scenarios):
     
     state_size = 259 
     action_size = 6
-    hidden_size = 256
+    hidden_size = 512
     agent = DQNAgent(state_size,hidden_size, action_size)
     
 
