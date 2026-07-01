@@ -1,0 +1,8 @@
+{
+    "average_reward": 374.764896808415,
+    "success_rate": 55.00000000000001,
+    "out_of_road_rate": 18.0,
+    "crash_vehicle_rate": 27.0,
+    "tested_scenarios": 100,
+    "start_seed": 21
+}
