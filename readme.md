@@ -56,4 +56,4 @@ python evaluate.py
 python visualize.py
 
 
-Note: The complete hyperparameter configuration (Epsilon Decay, Buffer Size, Batch Size) used for the massive 25k-episode generalization run can be reviewed directly in main.py.
+Note: The complete hyperparameter configuration (Epsilon Decay, Buffer Size, Batch Size) used for the massive 10k-episode generalization run can be reviewed directly in main.py.
