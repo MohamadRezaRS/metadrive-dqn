@@ -6,16 +6,17 @@ import random
 from src.network import DQNNetwork
 
 class DQNAgent:
-    def __init__(self, state_size,hidden_size, action_size, lr=3e-4, gamma=0.99):
+    def __init__(self, state_size,hidden_size, action_size, lr=3e-4, gamma=0.99 , device="cpu"):
         self.state_size = state_size
         self.action_size = action_size
         self.gamma = gamma
         self.lr = lr
         self.hidden_size = hidden_size
-        
+        self.device=device
+
         # 1. two networks: a primary Q-network and a Target network
-        self.policy_net = DQNNetwork(state_size, hidden_size , action_size=action_size)
-        self.target_net = DQNNetwork(state_size, hidden_size , action_size=action_size)
+        self.policy_net = DQNNetwork(state_size, hidden_size , action_size=action_size).to(self.device)
+        self.target_net = DQNNetwork(state_size, hidden_size , action_size=action_size).to(self.device)
 
         # copy the exact starting weights from policy to target
         self.target_net.load_state_dict(self.policy_net.state_dict())
@@ -44,6 +45,15 @@ class DQNAgent:
         applies the Bellman update and trains the neural network
         """
         states, actions, rewards, next_states, dones = experiences
+
+
+        # Push the entire batch of experiences to the GPU
+        states = states.to(self.device)
+        actions = actions.to(self.device)
+        rewards = rewards.to(self.device)
+        next_states = next_states.to(self.device)
+        dones = dones.to(self.device)
+        
 
         # 1. calculate current Q(s, a)
         current_q = self.policy_net(states).gather(1, actions.unsqueeze(1)).squeeze(1)

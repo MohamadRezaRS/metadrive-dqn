@@ -7,6 +7,8 @@ from src.replay_buffer import ReplayBuffer
 from src.agent import DQNAgent
 
 def train_agent(num_episodes=25000, start_seed=1, num_scenarios=50):
+    # 0. hardware detection
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 1. setup Environment
     env = create_env(start_seed=start_seed, num_scenarios=num_scenarios)
     
@@ -25,7 +27,7 @@ def train_agent(num_episodes=25000, start_seed=1, num_scenarios=50):
     state_size = 259 
     action_size = 6
     memory = ReplayBuffer(capacity=250000)  # Safe capacity for 25000 episodes
-    agent = DQNAgent(state_size, hidden_size, action_size, gamma=gamma)
+    agent = DQNAgent(state_size, hidden_size, action_size, gamma=gamma,device=device)
     
     # 4. tracking Arrays for  Reports
     rewards_history = []
